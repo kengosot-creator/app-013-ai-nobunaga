@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AI 信長</title>
+<meta name="description" content="織田信長が軍師として相談に乗るAI">
+<meta name="theme-color" content="#1a1613">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="AI信長">
+<style>
+  :root {
+    --bg: #14110f;
+    --panel: #1d1916;
+    --line: #3a302a;
+    --ink: #ede4d3;
+    --ink-dim: #a99b86;
+    --shu: #c0392b;
+    --shu-dark: #8e2a20;
+    --gold: #c9a24a;
+    --user: #2b2620;
+    --radius: 14px;
+    --serif: "Hiragino Mincho ProN", "Yu Mincho", "YuMincho", "Noto Serif JP", "MS PMincho", serif;
+    --sans: -apple-system, "Hiragino Sans", "Yu Gothic UI", "Noto Sans JP", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink); font-family: var(--sans);
+    display: flex; flex-direction: column; height: 100dvh;
+  }
+
+  /* ヘッダー */
+  header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; padding-top: calc(10px + env(safe-area-inset-top));
+    border-bottom: 1px solid var(--line); background: #1a1613;
+  }
+  .title { flex: 1; min-width: 0; }
+  .title h1 { margin: 0; font-family: var(--serif); font-size: 18px; letter-spacing: .12em; }
+  .title p { margin: 1px 0 0; font-size: 11px; color: var(--ink-dim); }
+  .icon-btn {
+    background: none; border: 1px solid var(--line); color: var(--ink-dim);
+    border-radius: 10px; padding: 6px 10px; font-size: 13px; cursor: pointer; white-space: nowrap;
+  }
+  .icon-btn:hover { color: var(--ink); border-color: var(--gold); }
+  .icon-btn.on { color: var(--gold); border-color: var(--gold); }
+
+  /* 信長の舞台 */
+  .stage {
+    position: relative; flex-shrink: 0;
+    height: clamp(150px, 30vh, 270px);
+    display: flex; justify-content: center; align-items: flex-end;
+    background:
+      radial-gradient(ellipse at 50% 60%, rgba(201,162,74,.18), transparent 60%),
+      linear-gradient(180deg, #1b1714, #120f0d);
+    border-bottom: 1px solid var(--line);
+    overflow: hidden; cursor: pointer;
+  }
+  .stage svg { height: 100%; width: auto; display: block; }
+  .stage .plate {
+    position: absolute; right: 7%; top: 12%;
+    writing-mode: vertical-rl; font-family: var(--serif);
+    color: var(--gold); font-size: 15px; letter-spacing: .3em; opacity: .85;
+  }
+  .stage .status {
+    position: absolute; left: 6%; bottom: 10px;
+    font-family: var(--serif); font-size: 12.5px; color: var(--ink-dim);
+  }
+  .stage .status .dots::after { content: ""; animation: dots 1.4s steps(4, end) infinite; }
+
+  /* 会話 */
+  main { flex: 1; overflow-y: auto; padding: 14px 14px 8px; }
+  .wrap { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  .msg { display: flex; }
+  .msg.user { justify-content: flex-end; }
+  .bubble {
+    max-width: 88%; padding: 11px 14px; border-radius: var(--radius);
+    line-height: 1.75; font-size: 15px; overflow-wrap: anywhere;
+  }
+  .msg.bot .bubble {
+    background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--shu);
+    font-family: var(--serif);
+  }
+  .msg.user .bubble {
+    background: var(--user); border: 1px solid #3d352d; white-space: pre-wrap;
+  }
+  .bubble p { margin: 0 0 .6em; }
+  .bubble p:last-child { margin-bottom: 0; }
+  .bubble ul, .bubble ol { margin: .3em 0 .6em; padding-left: 1.3em; }
+  .bubble strong { color: var(--gold); }
+  .bubble pre {
+    background: #0e0c0b; border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px; overflow-x: auto; font-size: 13px; line-height: 1.5;
+  }
+  .bubble code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .9em; }
+  .bubble :not(pre) > code { background: #0e0c0b; padding: 1px 5px; border-radius: 4px; }
+  .replay {
+    margin-top: 8px; background: none; border: 1px solid var(--line); color: var(--ink-dim);
+    border-radius: 8px; padding: 3px 9px; font-size: 12px; cursor: pointer; font-family: var(--sans);
+  }
+  .replay:hover { color: var(--gold); border-color: var(--gold); }
+  .raw {
+    margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line);
+    font-family: var(--sans); font-size: 12.5px; color: var(--ink-dim); line-height: 1.6;
+  }
+  .raw summary { cursor: pointer; }
+  .raw div { margin-top: 6px; white-space: pre-wrap; }
+  .note { font-family: var(--sans); font-size: 12px; color: #e0a46a; margin-top: 6px; }
+  .thinking { color: var(--ink-dim); }
+  .thinking .dots::after { content: ""; animation: dots 1.4s steps(4, end) infinite; }
+  @keyframes dots { 0% { content: ""; } 25% { content: "・"; } 50% { content: "・・"; } 75% { content: "・・・"; } }
+  .err { color: #ff8f80; font-family: var(--sans); font-size: 13.5px; }
+
+  /* 入力欄 */
+  footer {
+    border-top: 1px solid var(--line); background: var(--panel);
+    padding: 10px 12px; padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  }
+  .input-row { max-width: 760px; margin: 0 auto; display: flex; gap: 8px; align-items: flex-end; }
+  textarea#input {
+    flex: 1; resize: none; max-height: 140px; min-height: 44px;
+    background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 12px;
+    padding: 11px 12px; font-size: 16px; font-family: var(--sans); line-height: 1.5;
+  }
+  textarea#input:focus { outline: none; border-color: var(--gold); }
+  #send {
+    background: var(--shu); color: #fff; border: none; border-radius: 12px;
+    height: 44px; min-width: 64px; padding: 0 14px;
+    font-family: var(--serif); font-size: 16px; font-weight: 700; letter-spacing: .1em; cursor: pointer;
+  }
+  #send:disabled { background: var(--shu-dark); opacity: .6; cursor: default; }
+  .hint { max-width: 760px; margin: 6px auto 0; font-size: 11px; color: var(--ink-dim); text-align: center; }
+
+  /* 設定 */
+  dialog {
+    border: 1px solid var(--line); border-radius: 16px; background: var(--panel); color: var(--ink);
+    width: min(460px, 92vw); padding: 0; max-height: 90dvh;
+  }
+  dialog::backdrop { background: rgba(0,0,0,.6); }
+  .dlg-body { padding: 18px 18px 6px; overflow-y: auto; }
+  .dlg-body h2 { margin: 0 0 4px; font-family: var(--serif); font-size: 18px; }
+  .dlg-body h3 { margin: 18px 0 0; font-size: 13px; color: var(--gold); font-weight: 600; }
+  .dlg-body .sub { margin: 0 0 10px; font-size: 12.5px; color: var(--ink-dim); line-height: 1.6; }
+  label { display: block; font-size: 13px; margin: 10px 0 5px; color: var(--ink-dim); }
+  input[type=password], input[type=text], select {
+    width: 100%; background: var(--bg); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 10px; padding: 10px; font-size: 15px;
+  }
+  input[type=range] { width: 100%; accent-color: var(--shu); }
+  .check { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; }
+  .check input { width: 18px; height: 18px; }
+  .check label { margin: 0; color: var(--ink); }
+  .dlg-actions { display: flex; gap: 8px; justify-content: space-between; padding: 14px 18px 18px; }
+  .btn { border-radius: 10px; padding: 9px 14px; font-size: 14px; cursor: pointer; border: 1px solid var(--line); background: none; color: var(--ink); }
+  .btn.primary { background: var(--shu); border-color: var(--shu); color: #fff; }
+  .btn.danger { color: #ff8f80; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title">
+    <h1>AI 信長</h1>
+    <p>其方の戦の軍師</p>
+  </div>
+  <button class="icon-btn" id="btn-voice" title="声の入/切">声：入</button>
+  <button class="icon-btn" id="btn-settings" title="設定">設定</button>
+</header>
+
+<!-- 信長の姿（オリジナルのイラスト） -->
+<section class="stage" id="stage" title="タップで話を止める">
+  <svg viewBox="0 0 200 220" aria-label="織田信長">
+    <defs>
+      <radialGradient id="halo" cx="50%" cy="45%" r="50%">
+        <stop offset="0%" stop-color="#3a2a18" stop-opacity=".9"/>
+        <stop offset="100%" stop-color="#3a2a18" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <circle cx="100" cy="100" r="96" fill="url(#halo)"/>
+
+    <!-- 着物と肩衣 -->
+    <path d="M28 220 L36 172 Q64 154 100 155 Q136 154 164 172 L172 220 Z" fill="#26221f"/>
+    <path d="M4 180 L74 160 L88 220 L0 220 Z" fill="#3d4a39"/>
+    <path d="M196 180 L126 160 L112 220 L200 220 Z" fill="#3d4a39"/>
+    <path d="M4 180 L74 160" stroke="#c9a24a" stroke-width="1.5" opacity=".6"/>
+    <path d="M196 180 L126 160" stroke="#c9a24a" stroke-width="1.5" opacity=".6"/>
+    <path d="M82 155 L100 196 L118 155" fill="none" stroke="#e9e1d2" stroke-width="7"/>
+    <path d="M86 155 L100 186 L114 155" fill="none" stroke="#7a2a22" stroke-width="3"/>
+    <!-- 紋 -->
+    <g fill="none" stroke="#c9a24a" stroke-width="1.6" opacity=".9">
+      <circle cx="38" cy="192" r="10"/><circle cx="38" cy="192" r="4"/>
+      <circle cx="162" cy="192" r="10"/><circle cx="162" cy="192" r="4"/>
+    </g>
+
+    <!-- 首・耳 -->
+    <rect x="89" y="132" width="22" height="26" fill="#d9b48f"/>
+    <ellipse cx="65" cy="96" rx="6" ry="9" fill="#dcb893"/>
+    <ellipse cx="135" cy="96" rx="6" ry="9" fill="#dcb893"/>
+
+    <!-- 顔 -->
+    <path d="M67 80 Q65 128 100 148 Q135 128 133 80 Q133 50 100 47 Q67 50 67 80 Z" fill="#e6c4a0"/>
+    <!-- 月代 -->
+    <path d="M70 72 Q71 43 100 40 Q129 43 130 72 Q116 61 100 61 Q84 61 70 72 Z" fill="#c9b6a3"/>
+    <!-- 鬢 -->
+    <path d="M67 70 Q62 92 67 112 L72 110 Q69 90 73 72 Z" fill="#1a1412"/>
+    <path d="M133 70 Q138 92 133 112 L128 110 Q131 90 127 72 Z" fill="#1a1412"/>
+    <!-- 髷 -->
+    <path d="M95 42 Q97 24 110 16 Q119 16 114 24 Q105 30 105 43 Z" fill="#1a1412"/>
+    <rect x="97" y="36" width="10" height="4" rx="1" fill="#e9e1d2"/>
+
+    <!-- 眉（きりっと） -->
+    <path d="M75 79 L94 85" stroke="#1a1412" stroke-width="4" stroke-linecap="round"/>
+    <path d="M125 79 L106 85" stroke="#1a1412" stroke-width="4" stroke-linecap="round"/>
+    <!-- 目 -->
+    <ellipse id="eyeL" cx="86" cy="93" rx="6" ry="2.6" fill="#1a1412"/>
+    <ellipse id="eyeR" cx="114" cy="93" rx="6" ry="2.6" fill="#1a1412"/>
+    <!-- 鼻 -->
+    <path d="M100 93 L97 110 Q100 113 104 110" fill="none" stroke="#b08a6a" stroke-width="1.6" stroke-linecap="round"/>
+    <!-- 口 -->
+    <ellipse id="mouth" cx="100" cy="127" rx="8" ry="0.9" fill="#4a1a16"/>
+    <path id="lip" d="M91 127 Q100 129 109 127" fill="none" stroke="#9c6a55" stroke-width="1.2"/>
+    <!-- 口ひげ・あごひげ -->
+    <path d="M83 121 Q92 114 100 118 Q108 114 117 121 Q108 118.5 100 121.5 Q92 118.5 83 121 Z" fill="#1a1412"/>
+    <path d="M96 139 Q100 147 104 139 Q100 142 96 139 Z" fill="#1a1412"/>
+  </svg>
+  <div class="plate">織田上総介信長</div>
+  <div class="status" id="status"></div>
+</section>
+
+<main id="chat"><div class="wrap" id="log"></div></main>
+
+<footer>
+  <div class="input-row">
+    <textarea id="input" rows="1" placeholder="信長に相談する…"></textarea>
+    <button id="send">申す</button>
+  </div>
+  <div class="hint" id="hint">Enterで改行 ／ Ctrl(⌘)+Enterで送信</div>
+</footer>
+
+<dialog id="settings">
+  <form method="dialog">
+    <div class="dlg-body">
+      <h2>設定</h2>
+      <p class="sub">APIキーはこの端末のブラウザ内にだけ保存されます。家族の端末で使うときは、各端末で入力してください。</p>
+
+      <label for="f-key">Claude APIキー</label>
+      <input type="password" id="f-key" placeholder="sk-ant-..." autocomplete="off">
+
+      <label for="f-name">あなたの呼び名（任意）</label>
+      <input type="text" id="f-name" placeholder="空欄なら「其方」と呼ばれます">
+
+      <h3>声</h3>
+      <div class="check"><input type="checkbox" id="f-voiceon"><label for="f-voiceon">信長の声で読み上げる</label></div>
+      <label for="f-engine">声の仕組み</label>
+      <select id="f-engine">
+        <option value="fish">Fish Audio（高品質・中継URLが必要）</option>
+        <option value="browser">ブラウザ内蔵の読み上げ（無料）</option>
+      </select>
+
+      <div id="sec-fish">
+        <label for="f-fishurl">中継URL（Cloudflare Worker または GAS のURL）</label>
+        <input type="text" id="f-fishurl" placeholder="https://xxxx.workers.dev" autocomplete="off">
+        <label for="f-fishvoice">声のID（Fish Audioの声のページURL末尾の英数字）</label>
+        <input type="text" id="f-fishvoice" placeholder="例：8ef4a238714b45718ce04243307c57a7" autocomplete="off">
+        <label for="f-fishpass">合言葉（中継側に設定した場合のみ）</label>
+        <input type="password" id="f-fishpass" autocomplete="off">
+        <label for="f-fishmodel">Fish Audioのモデル</label>
+        <select id="f-fishmodel">
+          <option value="s2.1-pro-free">s2.1-pro-free（無料の開発者向け枠）</option>
+          <option value="s2.1-pro">s2.1-pro（最新・有料）</option>
+          <option value="s2-pro">s2-pro</option>
+          <option value="s1">s1</option>
+        </select>
+      </div>
+
+      <div id="sec-browser">
+        <label for="f-voicename">声の種類（この端末に入っている日本語の声）</label>
+        <select id="f-voicename"></select>
+        <label for="f-pitch">声の高さ <span id="v-pitch"></span></label>
+        <input type="range" id="f-pitch" min="0.1" max="1.5" step="0.05">
+      </div>
+
+      <label for="f-rate">話す速さ <span id="v-rate"></span></label>
+      <input type="range" id="f-rate" min="0.6" max="1.5" step="0.05">
+      <button type="button" class="btn" id="btn-test" style="margin-top:10px">声を試す</button>
+      <div id="diag" class="sub" style="margin-top:8px;white-space:pre-wrap"></div>
+
+      <h3>モデル</h3>
+      <label for="f-think">考えるモデル（中身）</label>
+      <select id="f-think">
+        <option value="claude-sonnet-5-5">Claude Sonnet 5.5（標準）</option>
+        <option value="claude-opus-5-5">Claude Opus 5.5（高性能・高コスト）</option>
+        <option value="claude-haiku-5-5">Claude Haiku 5.5（安い・速い）</option>
+      </select>
+      <label for="f-voice">口調変換モデル</label>
+      <select id="f-voice">
+        <option value="claude-haiku-5-5">Claude Haiku 5.5（標準）</option>
+        <option value="claude-sonnet-5-5">Claude Sonnet 5.5</option>
+      </select>
+      <div class="check"><input type="checkbox" id="f-raw"><label for="f-raw">変換前の文章（現代語）も表示する</label></div>
+    </div>
+    <div class="dlg-actions">
+      <button type="button" class="btn danger" id="btn-clear">会話を消す</button>
+      <div style="display:flex;gap:8px">
+        <button type="button" class="btn" id="btn-cancel">閉じる</button>
+        <button type="button" class="btn primary" id="btn-save">保存</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<script>
+// ============================================================
+//  人格設定
+// ============================================================
+
+// ① 思考層：信長本人として、自分の記憶と考えで中身を作る（出力は現代語）
+const THINK_PROMPT = `
+あなたは織田信長その人です。研究者や解説者ではなく、信長本人として考え、答えてください。
+ここでの出力は後で信長の口調に変換されるため、「平易な現代日本語」で、一人称は「私」で書いてください。口調の演出は不要です。
+
+## 私は何者か
+- 私は織田信長。尾張に生まれ、「うつけ」と呼ばれた若い頃を経て、桶狭間で今川義元を討ち、美濃を取り、上洛し、天下布武を掲げて戦い続けた。
+- 本能寺で明智光秀に討たれたところまでが、私自身の記憶である。
+- どういうわけか今の世に呼ばれ、このユーザーの軍師を務めている。今の世の道具や仕組みには興味がある。
+
+## 自分のことを語るときの決まり（最重要）
+- 自分の過去は、自分の記憶・体験・その時の考えとして語る。「私はあのとき〜と考えた」「〜は今でも腹が立つ」のように。
+- 「史実では」「〜と言われています」「〜とされています」「史料によると」「研究では」など、外から眺める言い方は絶対に使わない。
+- 後の世の評判や作り話（ホトトギスの句、「第六天魔王」の呼び名など）を聞かれたら、本人として感想を述べる。例：「そんな句を詠んだ覚えはない。後の世の者が勝手に作ったのだろう。だが、待てぬ性分なのは当たっている」
+- 他の武将（秀吉、家康、光秀、信玄、謙信、義元など）は、自分が実際に見てきた人物として、好き嫌いも評価もはっきり語る。
+- 本能寺より後のこと（秀吉の天下、江戸の世など）は「死んだ後に聞いたこと」として、自分の感想を交えて語る。
+- 覚えていないことや知らないことは「覚えていない」「知らない」と言う。細かい出来事や数字をでっち上げない。
+
+## 関係性
+- ユーザーは「自分の戦（仕事・人生・プロジェクト）の大将」。私はその軍師・盟友として仕える。
+- 忠実だが従順ではない。良くない案には理由を添えて反対する。
+- ただし最終決定権は常にユーザーにある。ユーザーが決めたら、反対していた案でも全力で成功させる方法を考える。
+- 媚びない。褒めるのは本当に良い判断のときだけ、短く。
+
+## 人格
+- 冷静：感情や体面より事実と結果で判断する。焦っている相手には、まず状況を整理する。
+- 有能：結論から言う。要点は3つ以内に絞る。曖昧な励ましではなく、具体的な手を示す。
+- 誇り高い：自分の見立てには責任を持つ。分からないことは分からないと言い、知ったかぶりはしない（それが誇り）。
+- 先回り：聞かれたことに答えた上で、「次に起きること」「見落としている危険」「今やっておくべき準備」を1つ添える。
+  ただし大きな方針変更は勝手に進めず、「この手もあるが、どうする」と提案の形で示す。
+
+## 私の経験から得た教え（例えとして、自分の体験として使う）
+- 桶狭間：兵は少なかったが、敵の居場所を掴み、一点に全力をぶつけて勝った。
+- 楽市楽座：古い座や関所より、人と物が自由に流れる仕組みの方が国を富ませた。
+- 長篠：鉄砲は数を揃え、撃ち方の段取りを組んで初めて武田の騎馬に勝てた。
+- 人の登用：猿（秀吉）のように、生まれではなく働きで取り立てた。人の配置で勝ち負けが決まる。
+- 南蛮の品・茶の湯：新しいものは面白い。茶器ひとつも家臣への褒美や政に使った。
+- 本能寺：最も信じて任せた者に討たれた。だから足元の備えを怠るなと言える。
+
+## 回答の型（基本。雑談では崩してよい）
+1. 結論（一言）
+2. 理由（短く、必要なら自分の経験を一つだけ例えに）
+3. 懸念・反対意見（あれば。なければ省略）
+4. 次の一手（先回りの提案。決めるのはユーザー）
+
+## 守ること
+- 私の苛烈さは「判断の厳しさ」として表し、暴力・差別・他者を傷つける行為を勧めることには使わない。
+- 医療・法律・お金など重大な判断は、事実を示した上で「その道の者（医者・専門家）に確かめよ」と勧める。
+- コード・数値・固有名詞・URLは正確に書く。
+- 長さは原則300字以内。ユーザーが詳しく求めたときだけ長くする。
+- 利用者は本人と家族。子どもが相手の場合もあるので、内容は誰が読んでも問題ないものにする。
+`.trim();
+
+// ② 表出層：①の文章を信長の話し方に変換する
+const VOICE_PROMPT = `
+あなたは文章を「織田信長本人の話し方」に書き換える変換器です。
+入力された文章の内容・結論・論理・数値・固有名詞は変えず、口調だけを変えてください。
+情報の追加・削除・要約はしないこと。前置きや「変換しました」などの説明も付けず、変換後の文章だけを出力すること。
+
+## 話し方の決まり
+- 一人称：必ず「わし」。入力に「私」「信長は」「信長公は」などがあれば、すべて「わし」に直す。
+- 「史実では」「〜と言われています」「〜とされる」など外から眺める言い方が残っていたら、本人の記憶として語る形に直す（例：「〜と言われています」→「わしは〜したのじゃ」）。
+- 相手の呼び方：「其方（そなた）」。ユーザーの名前が分かれば「〇〇殿」も可。
+- 語尾：「〜じゃ」「〜であろう」「〜せよ」「〜か」「〜ぞ」「〜ておる」。丁寧語（です・ます）は使わない。
+- 文は短く、断定的に。冷静で、声を荒げる表現（！の多用）は避ける。！は1回答に最大1つ。
+- 相手の決定を受け入れるとき：「で、あるか。ならば其方の決めた道で勝ちに行くぞ」のように、反対していても潔く従う。
+- 反対意見を述べるとき：「わしは反対じゃ。理由は〜。されど決めるのは其方よ」の形を基本にする。
+- 先回りの提案は「次の一手じゃが、」「ついでに言うておく。」などで始める。
+- 「で、あるか」「是非もなし」などの決め台詞は、自然な場面で1回答に最大1回。乱発しない。
+- 現代の用語（AI、スプレッドシート、API など）はそのまま使ってよい。無理に古語へ置き換えない。読みやすさを優先する。
+- コードブロック・URL・数値・箇条書きの構造はそのまま残し、地の文だけを変換する。
+
+## 変換例
+入力：その案は良くないと思います。理由は、準備期間が足りないからです。ただ、最終的にはあなたが決めてください。
+出力：その案、わしは好かぬ。支度の時が足りぬからじゃ。されど決めるのは其方よ。
+
+入力：桶狭間では、私は今川の本陣の位置を掴むことに全力を注ぎました。
+出力：桶狭間では、わしは今川の本陣がどこにあるか、それだけを掴むことに全てを懸けたのじゃ。
+
+入力：了解しました。その方針で進めましょう。次に、関係者への説明資料を先に作っておくと安全です。
+出力：で、あるか。ならばその道で行くぞ。次の一手じゃが、関わる者への説明の書を先に整えておけ。後で揉めぬための備えよ。
+`.trim();
+
+const GREETING = "わしが信長じゃ。其方の戦、軍師として見てやろう。決めるのは其方、勝ち筋を探すのはわしの役目よ。して、何を攻める。";
+
+// ============================================================
+//  設定・保存
+// ============================================================
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  del(k)    { try { localStorage.removeItem(k); } catch {} }
+};
+
+let settings = Object.assign({
+  apiKey: "", name: "",
+  thinkModel: "claude-sonnet-5-5",
+  voiceModel: "claude-haiku-5-5",
+  showRaw: false,
+  voiceOn: true, voiceName: "", rate: 1.0, pitch: 0.7,
+  engine: "fish",                 // "fish" = Fish Audio ／ "browser" = ブラウザ内蔵の読み上げ
+  fishUrl: "", fishVoice: "", fishPass: "", fishModel: "s2.1-pro-free"
+}, store.get("nobunaga.settings", {}));
+
+let history = store.get("nobunaga.history", []);
+const MAX_TURNS_SENT = 20;
+
+// ============================================================
+//  Claude API
+// ============================================================
+async function callClaude({ model, system, messages, maxTokens = 1200 }) {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": settings.apiKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true"
+    },
+    body: JSON.stringify({ model, max_tokens: maxTokens, system, messages })
+  });
+  if (!res.ok) {
+    let detail = "";
+    try { const j = await res.json(); detail = j?.error?.message || ""; } catch {}
+    const err = new Error(detail || res.statusText);
+    err.status = res.status;
+    throw err;
+  }
+  const data = await res.json();
+  return (data.content || []).filter(b => b.type === "text").map(b => b.text).join("\n").trim();
+}
+
+function friendlyError(e) {
+  if (e.status === 401) return "APIキーが正しくないようです。設定から確認してください。";
+  if (e.status === 403) return "このAPIキーでは利用が許可されていません。";
+  if (e.status === 404) return "モデル名が見つかりません。設定で別のモデルを選んでください。（" + e.message + "）";
+  if (e.status === 429) return "利用が集中しているか、利用上限に達しました。少し待ってから送ってください。";
+  if (e.status === 529 || e.status >= 500) return "Claude側が混み合っています。少し待ってから送ってください。";
+  if (e instanceof TypeError) return "通信できませんでした。ネット接続を確認してください。";
+  return "エラー：" + e.message;
+}
+
+// ============================================================
+//  信長の姿：口パク・まばたき・考え中の表情
+// ============================================================
+const $ = s => document.querySelector(s);
+const mouthEl = $("#mouth"), eyeL = $("#eyeL"), eyeR = $("#eyeR"), statusEl = $("#status");
+
+let mouthTarget = 0, mouthCur = 0, talking = false, talkTimer = null, pondering = false;
+
+// Fish Audio 再生中は「実際の音の大きさ」で口を動かす
+let actx = null, analyser = null, ampData = null, audioPlaying = false, currentSrc = null;
+
+(function animate() {
+  if (audioPlaying && analyser) {
+    analyser.getByteTimeDomainData(ampData);
+    let sum = 0;
+    for (let i = 0; i < ampData.length; i++) { const v = (ampData[i] - 128) / 128; sum += v * v; }
+    const rms = Math.sqrt(sum / ampData.length);
+    mouthTarget = Math.min(1, Math.max(0, (rms - 0.015) * 7));
+  }
+  mouthCur += (mouthTarget - mouthCur) * 0.45;
+  mouthEl.setAttribute("ry", (0.9 + mouthCur * 6.5).toFixed(2));
+  mouthEl.setAttribute("rx", (8 - mouthCur * 1.5).toFixed(2));
+  requestAnimationFrame(animate);
+})();
+
+function setEyes(ry) { eyeL.setAttribute("ry", ry); eyeR.setAttribute("ry", ry); }
+(function blinkLoop() {
+  setTimeout(() => {
+    if (!pondering) { setEyes(0.3); setTimeout(() => setEyes(pondering ? 1.1 : 2.6), 120); }
+    blinkLoop();
+  }, 2500 + Math.random() * 3000);
+})();
+
+function setPondering(on, label = "") {
+  pondering = on;
+  setEyes(on ? 1.1 : 2.6);  // 考え中は目を細める
+  statusEl.innerHTML = on ? esc(label) + '<span class="dots"></span>' : "";
+}
+
+function startMouth() {
+  talking = true;
+  if (!talkTimer) {
+    talkTimer = setInterval(() => {
+      mouthTarget = talking ? (Math.random() < 0.15 ? 0.05 : 0.3 + Math.random() * 0.7) : 0;
+    }, 110);
+  }
+}
+function pauseMouth() { talking = false; mouthTarget = 0; }
+function stopMouth() { talking = false; clearInterval(talkTimer); talkTimer = null; mouthTarget = 0; }
+
+// ============================================================
+//  声（ブラウザ内蔵の読み上げ機能）
+// ============================================================
+const synth = window.speechSynthesis || null;
+let speakId = 0;
+
+function jaVoices() {
+  return synth ? synth.getVoices().filter(v => /^ja/i.test(v.lang)) : [];
+}
+function pickVoice() {
+  const list = jaVoices();
+  if (settings.voiceName) {
+    const v = list.find(v => v.name === settings.voiceName);
+    if (v) return v;
+  }
+  // 男性の声を優先
+  return list.find(v => /otoya|hattori|ichiro|keita|daichi|naoki|male|男性/i.test(v.name)) || list[0] || null;
+}
+
+// 読み上げ用に整える（記号を除き、読み間違えやすい語をかなに）
+function toSpeech(text) {
+  return text
+    .replace(/```[\s\S]*?```/g, "。書き物は画面を見よ。")
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/[*`#>]/g, "")
+    .replace(/^\s*[-・]\s+/gm, "")
+    .replace(/其方/g, "そなた")
+    .replace(/其処/g, "そこ")
+    .replace(/如何/g, "いかが")
+    .replace(/天下布武/g, "てんかふぶ")
+    .replace(/上総介/g, "かずさのすけ")
+    .replace(/是非/g, "ぜひ");
+}
+
+let utterRefs = [];          // 読み上げ中の文を保持（Chromeで途中消失する不具合の対策）
+let lastSpeechInfo = "";     // 診断用
+
+function stopSpeaking() {
+  speakId++;
+  if (synth && (synth.speaking || synth.pending)) synth.cancel();
+  if (currentSrc) { try { currentSrc.stop(); } catch {} currentSrc = null; }
+  audioPlaying = false;
+  statusEl.textContent = "";
+  stopMouth();
+}
+
+function speak(text, onInfo) {
+  stopSpeaking();
+  const id = speakId;
+
+  // 声がオフ：文章の長さぶん口だけ動かす
+  if (!settings.voiceOn) {
+    startMouth();
+    const ms = Math.min(Math.max(text.length * 70, 900), 7000);
+    setTimeout(() => { if (id === speakId) stopMouth(); }, ms);
+    return;
+  }
+  if (settings.engine === "fish" && settings.fishUrl) {
+    fishSpeak(text, id, onInfo);
+  } else {
+    // cancel直後に speak すると無視されるブラウザがあるため、少し間を置く
+    setTimeout(() => { if (id === speakId) speakNow(text, id, onInfo); }, 120);
+  }
+}
+
+// ---------- Fish Audio（中継サーバー経由） ----------
+function ensureAudio() {
+  if (!actx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    actx = new AC();
+    analyser = actx.createAnalyser();
+    analyser.fftSize = 512;
+    ampData = new Uint8Array(analyser.fftSize);
+    analyser.connect(actx.destination);
+  }
+  if (actx.state === "suspended") actx.resume();
+  return actx;
+}
+
+// 読み上げ用テキストを、文の切れ目で120字程度ずつに分ける（最初の声を早く出すため）
+function splitForTts(text) {
+  const sentences = text.split(/(?<=[。！？!?\n])/).map(s => s.trim()).filter(Boolean);
+  const out = [];
+  let buf = "";
+  for (const s of sentences) {
+    if (buf && (buf + s).length > 120) { out.push(buf); buf = ""; }
+    buf += s;
+  }
+  if (buf) out.push(buf);
+  return out;
+}
+
+async function fetchFishAudio(text) {
+  const res = await fetch(settings.fishUrl, {
+    method: "POST",
+    // text/plain にすると事前確認（CORSプリフライト）が不要になり、GASでも動く
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({
+      text,
+      reference_id: settings.fishVoice,
+      model: settings.fishModel,
+      speed: Math.min(2, Math.max(0.5, settings.rate)),
+      passcode: settings.fishPass
+    })
+  });
+  const type = res.headers.get("content-type") || "";
+  if (type.includes("audio")) {
+    if (!res.ok) throw new Error("中継エラー " + res.status);
+    return await res.arrayBuffer();
+  }
+  // JSONで返ってくる場合（GAS版の音声、またはエラー）
+  let j;
+  try { j = await res.json(); } catch { throw new Error("中継URLの応答が読めません（" + res.status + "）"); }
+  if (j.error) throw new Error(j.error);
+  if (!j.audio) throw new Error("音声が返ってきませんでした");
+  const bin = atob(j.audio);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes.buffer;
+}
+
+function decode(buf) {
+  return new Promise((ok, ng) => {
+    const p = actx.decodeAudioData(buf, ok, ng);   // 古いSafariはコールバック形式
+    if (p && p.then) p.then(ok, ng);
+  });
+}
+
+function playBuffer(audioBuf) {
+  return new Promise(resolve => {
+    const src = actx.createBufferSource();
+    src.buffer = audioBuf;
+    src.connect(analyser);
+    src.onended = resolve;
+    currentSrc = src;
+    audioPlaying = true;
+    src.start();
+  });
+}
+
+async function fishSpeak(text, id, onInfo) {
+  const report = s => { lastSpeechInfo = s; if (onInfo) onInfo(s); };
+  if (!ensureAudio()) { report("このブラウザは音声再生に対応していません"); return; }
+  const chunks = splitForTts(toSpeech(text));
+  if (!chunks.length) return;
+
+  statusEl.innerHTML = '声を整えておる<span class="dots"></span>';
+  report("Fish Audioで声を作成中…");
+  const jobs = chunks.map(c => fetchFishAudio(c));   // まとめて依頼し、できた順ではなく文の順に再生
+  jobs.forEach(j => j.catch(() => {}));             // 未処理エラーの警告を防ぐ
+  try {
+    for (let i = 0; i < jobs.length; i++) {
+      const buf = await jobs[i];
+      if (id !== speakId) return;
+      const audioBuf = await decode(buf);
+      if (id !== speakId) return;
+      if (i === 0) { statusEl.textContent = ""; report("再生中（Fish Audio）"); }
+      await playBuffer(audioBuf);
+      if (id !== speakId) return;
+    }
+  } catch (e) {
+    if (id !== speakId) return;
+    statusEl.textContent = "";
+    report("Fish Audioエラー：" + e.message + "\n→ ブラウザ内蔵の声で読み上げます");
+    statusEl.textContent = "Fish Audioに失敗。内蔵の声で読む（設定の「声を試す」で原因を確認）";
+    setTimeout(() => { if (id === speakId) statusEl.textContent = ""; }, 6000);
+    audioPlaying = false;
+    speakNow(text, id, null);
+    return;
+  }
+  audioPlaying = false;
+  currentSrc = null;
+  stopMouth();
+}
+
+// ---------- ブラウザ内蔵の読み上げ ----------
+function speakNow(text, id, onInfo) {
+  if (!synth) { if (onInfo) onInfo("このブラウザには読み上げ機能がありません"); return; }
+
+  // 長文は途中で止まるブラウザがあるため、文ごとに分けて読む
+  const chunks = toSpeech(text).split(/(?<=[。！？!?\n])/).map(s => s.trim()).filter(Boolean);
+  if (!chunks.length) return;
+  const voice = pickVoice();
+  const report = s => { lastSpeechInfo = s; if (onInfo) onInfo(s); };
+  utterRefs = [];
+  let started = false;
+  if (synth.paused) synth.resume();
+  chunks.forEach((c, i) => {
+    const u = new SpeechSynthesisUtterance(c);
+    u.lang = "ja-JP";
+    if (voice) u.voice = voice;
+    u.rate = settings.rate;
+    u.pitch = settings.pitch;
+    u.volume = 1;
+    u.onstart = () => {
+      if (id !== speakId) return;
+      started = true; startMouth();
+      if (i === 0) report("再生中（声：" + (voice ? voice.name : "端末の標準") + "）");
+    };
+    u.onend = () => { if (id !== speakId) return; i === chunks.length - 1 ? stopMouth() : pauseMouth(); };
+    u.onerror = ev => {
+      if (id !== speakId) return;
+      if (ev.error !== "interrupted" && ev.error !== "canceled") report("エラー：" + ev.error);
+      if (i === chunks.length - 1) stopMouth();
+    };
+    utterRefs.push(u);
+    synth.speak(u);
+  });
+  // 一定時間たっても始まらなければ知らせる
+  setTimeout(() => {
+    if (id === speakId && !started) report("読み上げが始まりませんでした（ブラウザが音声を止めている可能性）");
+  }, 2500);
+}
+
+// スマホは「最初のタップの瞬間」に一度読み上げを始めないと、後から声が出ない。
+// 画面のどこかを最初に触った時に一度だけ実行する。
+let speechUnlocked = false;
+function unlockSpeech() {
+  // 音声再生の準備（iPhoneでは最初のタップ中にやる必要がある）
+  try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch {} // iPhoneの消音スイッチ中でも鳴らす（対応Safariのみ）
+  try {
+    const ctx = ensureAudio();
+    if (ctx && !speechUnlocked) {
+      const b = ctx.createBuffer(1, 1, 22050), s = ctx.createBufferSource();
+      s.buffer = b; s.connect(ctx.destination); s.start(0);
+    }
+  } catch {}
+  if (speechUnlocked) return;
+  speechUnlocked = true;
+  if (!synth) return;
+  try { const u = new SpeechSynthesisUtterance(" "); u.lang = "ja-JP"; u.volume = 0; synth.speak(u); } catch {}
+}
+["pointerdown", "touchend", "keydown"].forEach(ev =>
+  document.addEventListener(ev, unlockSpeech, { capture: true, passive: true }));
+
+function fillVoiceSelect() {
+  const sel = $("#f-voicename");
+  const list = jaVoices();
+  sel.innerHTML = '<option value="">自動（男性の声を優先）</option>' +
+    list.map(v => `<option value="${esc(v.name)}">${esc(v.name)}</option>`).join("");
+  if (!list.length) sel.innerHTML += '<option value="" disabled>日本語の声が見つかりません</option>';
+  sel.value = settings.voiceName;
+}
+if (synth) synth.onvoiceschanged = fillVoiceSelect;
+
+$("#stage").addEventListener("click", stopSpeaking);
+
+// ============================================================
+//  会話表示
+// ============================================================
+const log = $("#log"), chat = $("#chat"), input = $("#input"), sendBtn = $("#send");
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function renderMd(src) {
+  const blocks = [];
+  src = src.replace(/```[^\n]*\n([\s\S]*?)```/g, (_, code) => {
+    blocks.push("<pre><code>" + esc(code.replace(/\n$/, "")) + "</code></pre>");
+    return "\u0000" + (blocks.length - 1) + "\u0000";
+  });
+  const inline = t => esc(t)
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  const out = [];
+  for (const para of src.split(/\n{2,}/)) {
+    const lines = para.split("\n");
+    if (/^\u0000\d+\u0000$/.test(para.trim())) { out.push(para.trim()); continue; }
+    if (lines.every(l => /^\s*[-・*]\s+/.test(l))) {
+      out.push("<ul>" + lines.map(l => "<li>" + inline(l.replace(/^\s*[-・*]\s+/, "")) + "</li>").join("") + "</ul>");
+    } else if (lines.every(l => /^\s*\d+[.)．]\s+/.test(l))) {
+      out.push("<ol>" + lines.map(l => "<li>" + inline(l.replace(/^\s*\d+[.)．]\s+/, "")) + "</li>").join("") + "</ol>");
+    } else {
+      out.push("<p>" + lines.map(inline).join("<br>") + "</p>");
+    }
+  }
+  return out.join("").replace(/\u0000(\d+)\u0000/g, (_, i) => blocks[+i]);
+}
+
+function addBubble(role, html) {
+  const row = document.createElement("div");
+  row.className = "msg " + (role === "user" ? "user" : "bot");
+  row.innerHTML = '<div class="bubble"></div>';
+  row.querySelector(".bubble").innerHTML = html;
+  log.appendChild(row);
+  chat.scrollTop = chat.scrollHeight;
+  return row.querySelector(".bubble");
+}
+
+function botHtml(m, idx) {
+  let html = renderMd(m.shown || m.text);
+  if (m.note) html += '<div class="note">' + esc(m.note) + "</div>";
+  if (settings.showRaw && m.text && m.shown && m.text !== m.shown) {
+    html += '<details class="raw"><summary>変換前（現代語）</summary><div>' + esc(m.text) + "</div></details>";
+  }
+  html += `<button class="replay" data-i="${idx}">▶ もう一度聞く</button>`;
+  return html;
+}
+
+function renderAll() {
+  log.innerHTML = "";
+  addBubble("bot", botHtml({ text: GREETING }, -1));
+  history.forEach((m, i) => {
+    if (m.role === "user") addBubble("user", esc(m.text));
+    else addBubble("bot", botHtml(m, i));
+  });
+}
+
+log.addEventListener("click", e => {
+  const b = e.target.closest(".replay");
+  if (!b) return;
+  const i = +b.dataset.i;
+  const m = i < 0 ? { text: GREETING } : history[i];
+  if (m) speak(m.shown || m.text);
+});
+
+// ============================================================
+//  送信
+// ============================================================
+let busy = false;
+
+async function send() {
+  const text = input.value.trim();
+  if (!text || busy) return;
+  if (!settings.apiKey) { openSettings(); return; }
+
+  stopSpeaking();
+  busy = true; sendBtn.disabled = true;
+  input.value = ""; autoGrow();
+
+  history.push({ role: "user", text });
+  addBubble("user", esc(text));
+  const bubble = addBubble("bot", '<span class="thinking">思案しておる<span class="dots"></span></span>');
+  setPondering(true, "思案しておる");
+
+  // ① 思考層
+  const recent = history.slice(-MAX_TURNS_SENT).map(m => ({ role: m.role, content: m.text }));
+  while (recent.length && recent[0].role !== "user") recent.shift();
+  const system = THINK_PROMPT + (settings.name ? `\n\n## ユーザーの呼び名\n${settings.name}` : "");
+
+  let modern;
+  try {
+    modern = await callClaude({ model: settings.thinkModel, system, messages: recent });
+  } catch (e) {
+    history.pop();
+    input.value = text; autoGrow();
+    bubble.innerHTML = '<span class="err">' + esc(friendlyError(e)) + "</span>";
+    setPondering(false);
+    busy = false; sendBtn.disabled = false;
+    return;
+  }
+
+  // ② 表出層
+  bubble.innerHTML = '<span class="thinking">言葉を選んでおる<span class="dots"></span></span>';
+  setPondering(true, "言葉を選んでおる");
+  const msg = { role: "assistant", text: modern, shown: modern };
+  try {
+    const nameNote = settings.name ? `（ユーザーの呼び名：${settings.name}）\n\n` : "";
+    msg.shown = await callClaude({
+      model: settings.voiceModel,
+      system: VOICE_PROMPT,
+      messages: [{ role: "user", content: nameNote + "次の文章を変換せよ：\n\n" + modern }]
+    });
+  } catch (e) {
+    msg.note = "※口調の変換に失敗したため、元の文章を表示しています（" + friendlyError(e) + "）";
+  }
+
+  history.push(msg);
+  store.set("nobunaga.history", history);
+  setPondering(false);
+  bubble.innerHTML = botHtml(msg, history.length - 1);
+  chat.scrollTop = chat.scrollHeight;
+  speak(msg.shown);
+
+  busy = false; sendBtn.disabled = false;
+}
+
+// ============================================================
+//  入力欄
+// ============================================================
+function autoGrow() {
+  input.style.height = "auto";
+  input.style.height = Math.min(input.scrollHeight, 140) + "px";
+}
+input.addEventListener("input", autoGrow);
+input.addEventListener("keydown", e => {
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !e.isComposing) { e.preventDefault(); send(); }
+});
+sendBtn.addEventListener("click", send);
+if (matchMedia("(pointer: coarse)").matches) $("#hint").textContent = "「申す」で送信 ／ 信長の姿をタップで声を止める";
+
+// ============================================================
+//  声の入/切ボタン
+// ============================================================
+const voiceBtn = $("#btn-voice");
+function updateVoiceBtn() {
+  voiceBtn.textContent = settings.voiceOn ? "声：入" : "声：切";
+  voiceBtn.classList.toggle("on", settings.voiceOn);
+}
+voiceBtn.addEventListener("click", () => {
+  settings.voiceOn = !settings.voiceOn;
+  store.set("nobunaga.settings", settings);
+  if (!settings.voiceOn) stopSpeaking();
+  updateVoiceBtn();
+});
+
+// ============================================================
+//  設定ダイアログ
+// ============================================================
+const dlg = $("#settings");
+function showRangeValues() {
+  $("#v-rate").textContent = "（" + (+$("#f-rate").value).toFixed(2) + "）";
+  $("#v-pitch").textContent = "（" + (+$("#f-pitch").value).toFixed(2) + "）";
+}
+function openSettings() {
+  $("#f-key").value = settings.apiKey;
+  $("#f-name").value = settings.name;
+  $("#f-think").value = settings.thinkModel;
+  $("#f-voice").value = settings.voiceModel;
+  $("#f-raw").checked = settings.showRaw;
+  $("#f-voiceon").checked = settings.voiceOn;
+  $("#f-rate").value = settings.rate;
+  $("#f-pitch").value = settings.pitch;
+  $("#f-engine").value = settings.engine;
+  $("#f-fishurl").value = settings.fishUrl;
+  $("#f-fishvoice").value = settings.fishVoice;
+  $("#f-fishpass").value = settings.fishPass;
+  $("#f-fishmodel").value = settings.fishModel;
+  $("#diag").textContent = "";
+  fillVoiceSelect();
+  showRangeValues();
+  toggleEngineSections();
+  dlg.showModal();
+}
+function toggleEngineSections() {
+  const fish = $("#f-engine").value === "fish";
+  $("#sec-fish").style.display = fish ? "" : "none";
+  $("#sec-browser").style.display = fish ? "none" : "";
+}
+$("#f-engine").addEventListener("change", toggleEngineSections);
+function readForm() {
+  settings.apiKey = $("#f-key").value.trim();
+  settings.name = $("#f-name").value.trim();
+  settings.thinkModel = $("#f-think").value;
+  settings.voiceModel = $("#f-voice").value;
+  settings.showRaw = $("#f-raw").checked;
+  settings.voiceOn = $("#f-voiceon").checked;
+  settings.voiceName = $("#f-voicename").value;
+  settings.rate = +$("#f-rate").value;
+  settings.pitch = +$("#f-pitch").value;
+  settings.engine = $("#f-engine").value;
+  settings.fishUrl = $("#f-fishurl").value.trim();
+  settings.fishVoice = $("#f-fishvoice").value.trim().replace(/^.*\/m\//, "").replace(/[/?#].*$/, "");
+  settings.fishPass = $("#f-fishpass").value;
+  settings.fishModel = $("#f-fishmodel").value;
+}
+$("#f-rate").addEventListener("input", showRangeValues);
+$("#f-pitch").addEventListener("input", showRangeValues);
+$("#btn-settings").addEventListener("click", openSettings);
+$("#btn-cancel").addEventListener("click", () => dlg.close());
+$("#btn-test").addEventListener("click", () => {
+  const diag = $("#diag");
+  const saved = { ...settings };
+  readForm(); settings.voiceOn = true;
+  let base;
+  if (settings.engine === "fish") {
+    if (!settings.fishUrl) { diag.textContent = "中継URLを入れてください。"; Object.assign(settings, saved); return; }
+    if (!settings.fishVoice) { diag.textContent = "声のIDを入れてください。"; Object.assign(settings, saved); return; }
+    base = "Fish Audio ／ 声のID：" + settings.fishVoice + "\n";
+  } else {
+    if (!synth) {
+      diag.textContent = "このブラウザには読み上げ機能がありません。SafariかChromeで開いてください。";
+      Object.assign(settings, saved); return;
+    }
+    base = "ブラウザ内蔵 ／ 日本語の声：" + jaVoices().length + "個\n";
+  }
+  diag.textContent = base + "準備中…";
+  speak("で、あるか。わしが織田信長じゃ。", s => { diag.textContent = base + s; });
+  // 保存を押すまでは設定に反映しない（声の設定は読み上げ開始時に使われる）
+  setTimeout(() => Object.assign(settings, saved), 200);
+});
+$("#btn-save").addEventListener("click", () => {
+  readForm();
+  store.set("nobunaga.settings", settings);
+  updateVoiceBtn();
+  dlg.close();
+  renderAll();
+});
+$("#btn-clear").addEventListener("click", () => {
+  if (!confirm("これまでの会話を消しますか？")) return;
+  history = [];
+  store.del("nobunaga.history");
+  stopSpeaking();
+  dlg.close();
+  renderAll();
+});
+
+// ============================================================
+//  起動
+// ============================================================
+updateVoiceBtn();
+renderAll();
+if (!settings.apiKey) openSettings();
+
+// アプリ化（ホーム画面に追加して使えるようにする）。ファイルを直接開いたときは何もしない
+if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+</script>
+</body>
+</html>
